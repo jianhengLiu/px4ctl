@@ -121,12 +121,10 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         else if (mission_state == TASK)
         {
             Eigen::Vector3f p_B0_DES  = (T_W_B0.inverse() * T_W_Bs).translation();
-            T_B0_Bs.translation().x() = TAKEOFF_POS.x();
-            T_B0_Bs.translation().y() = TAKEOFF_POS.y();
-            // T_B0_DES.translation().x() = p_B0_DES.x();
-            // T_B0_DES.translation().y() = p_B0_DES.y();
-            mission_state = POSITION;
-            ROS_INFO("Swith to POSITION succeed! Heading to TAKEOFF_POS.");
+            T_B0_Bs.translation().x() = p_B0_DES.x();
+            T_B0_Bs.translation().y() = p_B0_DES.y();
+            mission_state             = POSITION;
+            ROS_INFO("Swith to POSITION succeed!");
         }
     }
     else if (rc_msg->channels[4] > 1750)

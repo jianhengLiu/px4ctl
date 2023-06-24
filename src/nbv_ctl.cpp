@@ -38,19 +38,23 @@ ServoToolbox  servo_tb;
 
 ros::Publisher target_pose_pub;
 
-Eigen::Affine3f T_W_B0, T_W_Bt, T_B_C;
-
 // 0: 初始时刻； k：看到TAG时刻； t:实时; s(et):设置的目标位姿
 //  W: World;V: View; B: Body; A: Apriltag
-Eigen::Affine3f     T_B0_Bs;
-Eigen::Affine3f     T_W_Bs;
-Eigen::Affine3f     T_W_A;
-geometry_msgs::Pose T_A_Bs;
-void                pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
+Eigen::Affine3f T_W_B0, T_W_Bt;
+Eigen::Affine3f T_B0_Bs, T_W_Bs, T_A_Cs;
+Eigen::Affine3f T_W_A, T_B_C;  // 外参
+
+void pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
 {
     if (mission_state != LAND)
     {
-        T_A_Bs = pose_set_msg->pose;
+        Eigen::Vector3f    p(pose_set_msg->pose.position.x, pose_set_msg->pose.position.y,
+                             pose_set_msg->pose.position.z);
+        Eigen::Quaternionf q(pose_set_msg->pose.orientation.w, pose_set_msg->pose.orientation.x,
+                             pose_set_msg->pose.orientation.y, pose_set_msg->pose.orientation.z);
+        T_A_Cs.matrix().block<3, 3>(0, 0) = q.toRotationMatrix();
+        T_A_Cs.matrix().block<3, 1>(0, 3) = p;
+        T_W_Bs                            = T_W_A * T_A_Cs * T_B_C.inverse();
     }
 }
 
@@ -125,12 +129,10 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         else if (mission_state == TASK)
         {
             Eigen::Vector3f p_B0_DES  = (T_W_B0.inverse() * T_W_Bs).translation();
-            T_B0_Bs.translation().x() = TAKEOFF_POS.x();
-            T_B0_Bs.translation().y() = TAKEOFF_POS.y();
-            // T_B0_DES.translation().x() = p_B0_DES.x();
-            // T_B0_DES.translation().y() = p_B0_DES.y();
-            mission_state = POSITION;
-            ROS_INFO("Swith to POSITION succeed! Heading to TAKEOFF_POS.");
+            T_B0_Bs.translation().x() = p_B0_DES.x();
+            T_B0_Bs.translation().y() = p_B0_DES.y();
+            mission_state             = POSITION;
+            ROS_INFO("Swith to POSITION succeed!");
         }
     }
     else if (rc_msg->channels[4] > 1750)
@@ -140,13 +142,13 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         {
             if (rc_ch[0] == 0.0 && rc_ch[1] == 0.0 && rc_ch[2] == 0.0 && rc_ch[3] == 0.0)
             {
-                T_B0_Bs.translation() = TO_POINT_POS;
-                mission_state         = TASK;
-                ROS_INFO("Set setpoint to TO_POINT_POS succeed!");
+                T_B0_Bs       = T_W_B0.inverse() * T_W_Bs;
+                mission_state = TASK;
+                ROS_INFO("Enter NBV mode!");
             }
             else
             {
-                ROS_WARN("Set setpoint to TO_POINT_POS failed! Rockers are not in reset middle!");
+                ROS_WARN("Enter NBV mode failed! Rockers are not in reset middle!");
                 return;
             }
         }
@@ -228,12 +230,10 @@ int main(int argc, char *argv[])
     ros::NodeHandle nh("~");
     ros::Rate       rate(30);
 
-    ros::Subscriber odom_sub = nh.subscribe<geometry_msgs::PoseStamped>(
-        "/mavros/vision_pose/pose", 100, odom_callback, ros::VoidConstPtr(), ros::TransportHints());
-
-    ros::Subscriber rc_sub = nh.subscribe<mavros_msgs::RCIn>(
-        "/mavros/rc/in", 10, rc_callback, ros::VoidConstPtr(), ros::TransportHints().tcpNoDelay());
-
+    ros::Subscriber odom_sub =
+        nh.subscribe<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 100, odom_callback);
+    ros::Subscriber rc_sub = nh.subscribe<mavros_msgs::RCIn>("/mavros/rc/in", 10, rc_callback);
+    
     ros::Subscriber pose_set_sub =
         nh.subscribe<geometry_msgs::PoseStamped>("/ar/cam_pose_level_set", 100, pose_set_callback);
     ros::Subscriber pitch_set_sub =

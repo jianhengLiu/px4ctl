@@ -41,12 +41,12 @@ ros::ServiceClient arming_client;
 ros::ServiceClient set_mode_client;
 
 //  W: World;V: View; B: Body;
-geometry_msgs::Pose T_A_Bs;
+geometry_msgs::Pose T_A_Cs;
 void                pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
 {
     if (mission_state != LAND)
     {
-        T_A_Bs = pose_set_msg->pose;
+        T_A_Cs = pose_set_msg->pose;
     }
 }
 
@@ -89,13 +89,13 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
                 mission_state            = POSITION;
                 last_set_hover_pose_time = ros::Time::now().toSec();
                 // pose 33
-                T_A_Bs.position.x    = -0.6;
-                T_A_Bs.position.y    = 0.0;
-                T_A_Bs.position.z    = 0.35;
-                T_A_Bs.orientation.w = 1.0;
-                T_A_Bs.orientation.x = 0.0;
-                T_A_Bs.orientation.y = 0.0;
-                T_A_Bs.orientation.z = 0.0;
+                T_A_Cs.position.x    = -0.6;
+                T_A_Cs.position.y    = 0.0;
+                T_A_Cs.position.z    = 0.35;
+                T_A_Cs.orientation.w = 1.0;
+                T_A_Cs.orientation.x = 0.0;
+                T_A_Cs.orientation.y = 0.0;
+                T_A_Cs.orientation.z = 0.0;
                 ROS_INFO("Switch to POSITION succeed!");
             }
             else
@@ -154,25 +154,25 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         // body frame: x-forward, y-left, z-up
         if (mission_state == POSITION)
         {
-            T_A_Bs.position.x +=
+            T_A_Cs.position.x +=
                 rc_ch[1] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_PITCH ? -1 : 1);
-            T_A_Bs.position.y +=
+            T_A_Cs.position.y +=
                 rc_ch[3] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_ROLL ? 1 : -1);
         }
         if (mission_state == LAND)
         {
-            T_A_Bs.position.z -= 0.3 * delta_t;
+            T_A_Cs.position.z -= 0.3 * delta_t;
         }
         else
         {
-            T_A_Bs.position.z +=
+            T_A_Cs.position.z +=
                 rc_ch[2] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_THROTTLE ? -1 : 1);
         }
 
-        if (T_A_Bs.position.z < -0.3)
-            T_A_Bs.position.z = -0.3;
-        else if (T_A_Bs.position.z > 2.0)
-            T_A_Bs.position.z = 2.0;
+        if (T_A_Cs.position.z < -0.3)
+            T_A_Cs.position.z = -0.3;
+        else if (T_A_Cs.position.z > 2.0)
+            T_A_Cs.position.z = 2.0;
     }
 }
 
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
             geometry_msgs::PoseStamped pose;
             pose.header.stamp    = ros::Time::now();
             pose.header.frame_id = "map";
-            pose.pose            = T_A_Bs;
+            pose.pose            = T_A_Cs;
             target_pose_pub.publish(pose);
         }
         // 下面写入callback里？

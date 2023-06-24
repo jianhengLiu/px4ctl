@@ -39,39 +39,55 @@ double last_set_hover_pose_time;
 ros::Publisher     target_pose_pub;
 ros::ServiceClient arming_client;
 ros::ServiceClient set_mode_client;
-sudo apt install ros-noetic-dynamixel-workbench
-//  W: World;V: View; B: Body;
-geometry_msgs::Pose T_W_B_set;
 
+//  W: World;V: View; B: Body;
+Eigen::Affine3f     T_W_Bt, T_V_Bt_set, T_W_V, T_B_C;
+geometry_msgs::Pose T_W_B_set;
+bool                receive_odom = false;
+void                odom_callback(const geometry_msgs::PoseStampedConstPtr &odom_msg)
+{
+    T_W_Bt.matrix().block<3, 3>(0, 0) =
+        Eigen::Quaternionf(odom_msg->pose.orientation.w, odom_msg->pose.orientation.x,
+                           odom_msg->pose.orientation.y, odom_msg->pose.orientation.z)
+            .toRotationMatrix();
+    T_W_Bt.matrix().block<3, 1>(0, 3) = Eigen::Vector3f(
+        odom_msg->pose.position.x, odom_msg->pose.position.y, odom_msg->pose.position.z);
+    receive_odom = true;
+}
+
+bool receive_pose_set = false;
 void pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
 {
-    Eigen::Affine3f T_W_B_set_tmp;
-    T_W_B_set_tmp.matrix().block<3, 3>(0, 0) =
+    Eigen::Affine3f T_V_Ct_set;
+    T_V_Ct_set.matrix().block<3, 3>(0, 0) =
         Eigen::Quaternionf(pose_set_msg->pose.orientation.w, pose_set_msg->pose.orientation.x,
                            pose_set_msg->pose.orientation.y, pose_set_msg->pose.orientation.z)
             .toRotationMatrix();
-    T_W_B_set_tmp.matrix().block<3, 1>(0, 3) =
+    T_V_Ct_set.matrix().block<3, 1>(0, 3) =
         Eigen::Vector3f(pose_set_msg->pose.position.x, pose_set_msg->pose.position.y,
                         pose_set_msg->pose.position.z);
+    T_V_Bt_set = T_V_Ct_set * T_B_C.inverse();
 
     if (mission_state != LAND)
     {
-        T_W_B_set.position.x = T_W_B_set_tmp.translation().x();
-        T_W_B_set.position.y = T_W_B_set_tmp.translation().y();
-        T_W_B_set.position.z = T_W_B_set_tmp.translation().z();
+        Eigen::Affine3f T_W_B_set_tmp = T_W_V * T_V_Bt_set;
+        T_W_B_set.position.x          = T_W_B_set_tmp.translation().x();
+        T_W_B_set.position.y          = T_W_B_set_tmp.translation().y();
+        T_W_B_set.position.z          = T_W_B_set_tmp.translation().z();
         Eigen::Quaternionf q(T_W_B_set_tmp.matrix().block<3, 3>(0, 0));
         T_W_B_set.orientation.w = q.w();
         T_W_B_set.orientation.x = q.x();
         T_W_B_set.orientation.y = q.y();
         T_W_B_set.orientation.z = q.z();
     }
+    receive_pose_set = true;
 }
 
 DynamixelWorkbench dynamixel_controller;  //声明对象
 
 #define BAUDRATE 57600
 #define ID 1
-#define INIT_RAD -1.8341293878  //-1.57233
+#define INIT_RAD -1.57233
 
 int  goal_position;
 void pitch_set_callback(const std_msgs::Float32ConstPtr &pitch_set_msg)
@@ -121,19 +137,27 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
     {
         if (mission_state == INIT)
         {
-            if (rc_ch[0] == 0.0 && rc_ch[1] == 0.0 && rc_ch[2] == 0.0 && rc_ch[3] == 0.0)
+            if (rc_ch[0] == 0.0 && rc_ch[1] == 0.0 && rc_ch[2] == 0.0 && rc_ch[3] == 0.0 &&
+                receive_odom && receive_pose_set)
             {
                 mission_state            = POSITION;
                 last_set_hover_pose_time = ros::Time::now().toSec();
                 // pose 33
-                T_W_B_set.position.x    = -0.6;
-                T_W_B_set.position.y    = 0.0;
-                T_W_B_set.position.z    = 0.35;
-                T_W_B_set.orientation.w = 1.0;
-                T_W_B_set.orientation.x = 0.0;
-                T_W_B_set.orientation.y = 0.0;
-                T_W_B_set.orientation.z = 0.0;
-                goal_position           = dynamixel_controller.convertRadian2Value(ID, INIT_RAD);
+                T_W_B_set.position.x         = -0.6;
+                T_W_B_set.position.y         = 0.0;
+                T_W_B_set.position.z         = 0.35;
+                T_W_B_set.orientation.w      = 1.0;
+                T_W_B_set.orientation.x      = 0.0;
+                T_W_B_set.orientation.y      = 0.0;
+                T_W_B_set.orientation.z      = 0.0;
+                Eigen::Affine3f T_W_B0       = T_W_Bt;
+                Eigen::Affine3f T_V_B0_set   = T_V_Bt_set;
+                T_V_B0_set.translation().z() = 0;
+                T_W_V                        = T_W_B0 * T_V_B0_set.inverse();
+                cout << "T_W_B0" << endl << T_W_B0.matrix() << endl;
+                cout << "T_V_B0_set" << endl << T_V_B0_set.matrix() << endl;
+                cout << "T_W_V" << endl << T_W_V.matrix() << endl;
+                goal_position = dynamixel_controller.convertRadian2Value(ID, INIT_RAD);
                 ROS_INFO("Switch to POSITION succeed!");
             }
             else
@@ -196,7 +220,7 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         {
             if (px4_state_prev.mode == "OFFBOARD")
             {
-                // goal_position = dynamixel_controller.convertRadian2Value(ID, INIT_RAD);
+                goal_position = dynamixel_controller.convertRadian2Value(ID, INIT_RAD);
                 mission_state = LAND;
             }
         }
@@ -248,8 +272,8 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
 
         if (T_W_B_set.position.z < -0.3)
             T_W_B_set.position.z = -0.3;
-        else if (T_W_B_set.position.z > 2.0)
-            T_W_B_set.position.z = 2.0;
+        else if (T_W_B_set.position.z > 1.0)
+            T_W_B_set.position.z = 1.0;
     }
 }
 void px4_state_callback(const mavros_msgs::StateConstPtr &state_msg)
@@ -263,6 +287,8 @@ int main(int argc, char *argv[])
     ros::NodeHandle nh("~");
     ros::Rate       rate(30);
 
+    ros::Subscriber odom_sub = nh.subscribe<geometry_msgs::PoseStamped>(
+        "/mavros/vision_pose/pose", 100, odom_callback, ros::VoidConstPtr(), ros::TransportHints());
     ros::Subscriber state_sub =
         nh.subscribe<mavros_msgs::State>("/mavros/state", 10, px4_state_callback,
                                          ros::VoidConstPtr(), ros::TransportHints().tcpNoDelay());
@@ -303,12 +329,11 @@ int main(int argc, char *argv[])
     //上电，只有断电的情况下才能设置控制模式
     goal_position = dynamixel_controller.convertRadian2Value(ID, INIT_RAD);
 
+    T_B_C.matrix() << 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0., 0., 0., 1.;
     while (ros::ok())
     {
-        // 获取当前舵机的位置
         // float radian = 0;
         // dynamixel_controller.getRadian(ID, &radian);
-        // cout << radian << endl;
         if (mission_state != INIT)
         {
             geometry_msgs::PoseStamped pose;

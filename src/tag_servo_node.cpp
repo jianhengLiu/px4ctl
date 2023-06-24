@@ -65,8 +65,8 @@ Eigen::Affine3f T_B_C;
 std::vector<std::vector<cv::Point3f>> tag_coord;
 
 // 0: 初始时刻； k：看到TAG时刻； t:实时
-Eigen::Affine3f T_B0_DES;
-Eigen::Affine3f T_W_DES, T_W_DES_prev;
+Eigen::Affine3f T_B0_Bs;
+Eigen::Affine3f T_W_Bs, T_W_DES_prev;
 Eigen::Affine3f T_W_TAGk, T_W_TAG;
 
 Eigen::Affine3f T_Ck_TAG;
@@ -122,9 +122,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     }
     else if (fb_state == TAG)
     {
-        Eigen::Vector3f p_B0_DES   = (T_W_B0.inverse() * T_W_DES).translation();
-        T_B0_DES.translation().x() = p_B0_DES.x();
-        T_B0_DES.translation().y() = p_B0_DES.y();
+        Eigen::Vector3f p_B0_DES   = (T_W_B0.inverse() * T_W_Bs).translation();
+        T_B0_Bs.translation().x() = p_B0_DES.x();
+        T_B0_Bs.translation().y() = p_B0_DES.y();
         fb_state                   = VIO;
         ROS_INFO("Feeback state: VIO");
     }
@@ -174,10 +174,10 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
                 T_W_B0                   = T_W_Bt;
                 mode                     = POSITION;
                 last_set_hover_pose_time = ros::Time::now().toSec();
-                T_B0_DES                 = Eigen::Affine3f::Identity();
-                T_B0_DES.translation()   = Eigen::Vector3f(0.0, 0.0, TAKEOFF_ALTITUDE);
+                T_B0_Bs                 = Eigen::Affine3f::Identity();
+                T_B0_Bs.translation()   = Eigen::Vector3f(0.0, 0.0, TAKEOFF_ALTITUDE);
                 T_W_TAG                  = Eigen::Affine3f::Identity();
-                T_W_DES_prev             = T_W_B0 * T_B0_DES;
+                T_W_DES_prev             = T_W_B0 * T_B0_Bs;
                 ROS_INFO("Switch to POSITION succeed!");
             }
             else
@@ -188,9 +188,9 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         }
         else if (mode == TAG_SERVO)
         {
-            Eigen::Vector3f p_B0_DES   = (T_W_B0.inverse() * T_W_DES).translation();
-            T_B0_DES.translation().x() = p_B0_DES.x();
-            T_B0_DES.translation().y() = p_B0_DES.y();
+            Eigen::Vector3f p_B0_DES   = (T_W_B0.inverse() * T_W_Bs).translation();
+            T_B0_Bs.translation().x() = p_B0_DES.x();
+            T_B0_Bs.translation().y() = p_B0_DES.y();
             mode                       = POSITION;
             ROS_INFO("Swith to POSITION succeed!");
         }
@@ -303,26 +303,26 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
         last_set_hover_pose_time = now;
 
         // body frame: x-forward, y-left, z-up
-        T_B0_DES.translation().x() +=
+        T_B0_Bs.translation().x() +=
             rc_ch[1] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_PITCH ? -1 : 1);
-        T_B0_DES.translation().y() +=
+        T_B0_Bs.translation().y() +=
             rc_ch[3] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_ROLL ? 1 : -1);
         if (mode == LAND)
         {
-            T_B0_DES.translation().z() -= 0.2 * delta_t;
+            T_B0_Bs.translation().z() -= 0.2 * delta_t;
         }
         else
         {
-            T_B0_DES.translation().z() +=
+            T_B0_Bs.translation().z() +=
                 rc_ch[2] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_THROTTLE ? -1 : 1);
         }
         // hover_pose(3) +=
         //     rc_ch[3] * param.max_manual_vel * delta_t * (param.rc_reverse.yaw ? 1 : -1);
 
-        if (T_B0_DES.translation().z() < -0.3)
-            T_B0_DES.translation().z() = -0.3;
-        else if (T_B0_DES.translation().z() > 1.0)
-            T_B0_DES.translation().z() = 1.0;
+        if (T_B0_Bs.translation().z() < -0.3)
+            T_B0_Bs.translation().z() = -0.3;
+        else if (T_B0_Bs.translation().z() > 1.0)
+            T_B0_Bs.translation().z() = 1.0;
     }
 }
 void px4_state_callback(const mavros_msgs::StateConstPtr &state_msg)
@@ -375,7 +375,7 @@ int main(int argc, char *argv[])
     {
         if (mode != INIT)
         {
-            T_W_DES = T_W_B0 * T_B0_DES;
+            T_W_Bs = T_W_B0 * T_B0_Bs;
             if (mode == POSITION)
             {
                 if (fb_state == TAG)
@@ -383,33 +383,33 @@ int main(int argc, char *argv[])
                     // 解释版：T_W_DES = T_W_TAG * T_W_TAGk.inverse() * T_W_DESk * T_W_DESk.inverse() * T_W_B0 * T_B0_DES;
 
                     Eigen::Vector3f p_delta = T_W_TAG.translation() - T_W_TAGk.translation();
-                    T_W_DES.translation().x() += p_delta.x();
-                    T_W_DES.translation().y() += p_delta.y();
+                    T_W_Bs.translation().x() += p_delta.x();
+                    T_W_Bs.translation().y() += p_delta.y();
                 }
             }
             else if (mode == TAG_SERVO)
             {
                 if (fb_state == TAG)
                 {
-                    T_W_DES.translation().x() = T_W_TAG.translation().x();
-                    T_W_DES.translation().y() = T_W_TAG.translation().y();
+                    T_W_Bs.translation().x() = T_W_TAG.translation().x();
+                    T_W_Bs.translation().y() = T_W_TAG.translation().y();
                 }
             }
 
             geometry_msgs::PoseStamped pose;
             pose.header.stamp    = ros::Time::now();
             pose.header.frame_id = "map";
-            pose.pose.position.x = T_W_DES.translation().x();
-            pose.pose.position.y = T_W_DES.translation().y();
-            pose.pose.position.z = T_W_DES.translation().z();
-            Eigen::Quaternionf q(T_W_DES.matrix().block<3, 3>(0, 0));
+            pose.pose.position.x = T_W_Bs.translation().x();
+            pose.pose.position.y = T_W_Bs.translation().y();
+            pose.pose.position.z = T_W_Bs.translation().z();
+            Eigen::Quaternionf q(T_W_Bs.matrix().block<3, 3>(0, 0));
             pose.pose.orientation.w = q.w();
             pose.pose.orientation.x = q.x();
             pose.pose.orientation.y = q.y();
             pose.pose.orientation.z = q.z();
             target_pose_pub.publish(pose);
 
-            T_W_DES_prev = T_W_DES;
+            T_W_DES_prev = T_W_Bs;
         }
         ros::spinOnce();
         rate.sleep();

@@ -18,6 +18,7 @@ message(WARNING "OpenCV_VERSION: ${OpenCV_VERSION}")
 
 find_package(Eigen3)
 include_directories(
+        include
         ${catkin_INCLUDE_DIRS}
         ${EIGEN3_INCLUDE_DIR}
 )

@@ -39,7 +39,7 @@ double last_set_hover_pose_time;
 ros::Publisher     target_pose_pub;
 ros::ServiceClient arming_client;
 ros::ServiceClient set_mode_client;
-sudo apt install ros-noetic-dynamixel-workbench
+
 //  W: World;V: View; B: Body;
 geometry_msgs::Pose T_W_B_set;
 

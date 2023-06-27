@@ -12,7 +12,7 @@
 using namespace std;
 
 // SIM 0：实飞； 1：手持模拟飞
-#define SIM 0
+#define SIM 1
 #define DEAD_ZONE 0.25
 #define MAX_MANUAL_VEL 1.0
 #define RC_REVERSE_PITCH 1

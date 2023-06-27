@@ -4,7 +4,9 @@
 
 **dependencies:**
 ```
-sudo apt install ros-noetic-dynamixel-workbench
+sudo apt install ros-noetic-dynamixel-workbench ros-noetic-mavros ros-noetic-mavros-extras ros-noetic-vrpn-client-ros ros-noetic-realsense2-camera ros-noetic-realsense2-description
+wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh
+sudo bash ./install_geographiclib_datasets.sh   
 ```
 
 ## 1. 遥控器通道说明：
@@ -27,11 +29,10 @@ sudo apt install ros-noetic-dynamixel-workbench
 
 1. NUC端启动硬件设备
    ```
-   sh ./src/px4ctl/scripts/px4_realsense_mocap.sh
-   ```
-2. NBV端：启动
-   ```
-    arm --hash --ros --realtime --use_gt
+   # NUC ip: 192.168.2.100
+   export ROS_MASTER_URI=http://192.168.2.100:11311
+   export ROS_HOSTNAME=192.168.2.100
+   sh ./src/px4ctl/scripts/px4_l515_mocap.sh
    ```
 3. 摇杆归零（通道567应当都为低档位），rpy归零
 4. NUC端：运行控制程序
@@ -41,9 +42,17 @@ sudo apt install ros-noetic-dynamixel-workbench
 5. 5切中，提示油门增大到0.5
 6. 油门增大到0.5，切到位置模式，此时应有`/mavros/setpoint_position/local`的消息发布，终端输出POSITION MODE
 7. 6切高，无人机解锁并起飞
-8. 5切高，进入nbv模式，nbv依据candidate view自动执行
-9.  6切中，无人机降落
-10. 6切低，无人机上锁
+8. 5切高，进入nbv模式
+9. NBV端：启动
+   ```
+   # NUC ip: 192.168.2.186
+   export ROS_MASTER_URI=http://192.168.2.100:11311
+   export ROS_HOSTNAME=192.168.2.186
+   python main.py --hash --exp_path /home/chrisliu/Projects/ActiveRecon/ActiveRecon/exp/realworld_6 --config config/realworld.txt --method 6 --realworld --pose_opt
+   ```
+   nbv自动执行
+10. 6切中，无人机降落
+11. 7切高，无人机急停（或6切低，无人机上锁，但好像不太好使）
 
 ### 2.3. 应急操作
 

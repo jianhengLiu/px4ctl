@@ -2,14 +2,21 @@
     <rosparam>
         /camera/l500_depth_sensor/visual_preset: 5
         /camera/l500_depth_sensor/laser_power: 100
-        /camera/l500_depth_sensor/confidence_threshold: 1
+        <!-- /camera/l500_depth_sensor/confidence_threshold: 2
         /camera/l500_depth_sensor/min_distance: 190
         /camera/l500_depth_sensor/receiver_gain: 18
-        /camera/l500_depth_sensor/noise_filtering: 4
+        /camera/l500_depth_sensor/noise_filtering: 6
         /camera/l500_depth_sensor/post_processing_sharpening: 1
         /camera/l500_depth_sensor/pre_processing_sharpening: 0
         /camera/l500_depth_sensor/digital_gain: 2
-        /camera/l500_depth_sensor/ error_polling_enabled: true
+        /camera/l500_depth_sensor/error_polling_enabled: true -->
+        <!-- to avoid time delay -->
+        <!-- https://github.com/IntelRealSense/realsense-ros/issues/1902 -->
+        <!-- https://github.com/IntelRealSense/realsense-ros/issues/1607#issuecomment-760128960 -->
+        /camera/l500_depth_sensor/global_time_enabled: true
+        /camera/motion_module/global_time_enabled: true
+        /camera/rgb_camera/global_time_enabled: true
+        <!-- /camera/rgb_camera/exposure: 1000 -->
     </rosparam>
 
     <arg name="serial_no" default="" />
@@ -63,7 +70,7 @@
     <arg name="allow_no_texture_points" default="false" />
     <arg name="ordered_pc" default="false" />
 
-    <arg name="enable_sync" default="false" />
+    <arg name="enable_sync" default="true" />
     <arg name="align_depth" default="true" />
 
     <arg name="publish_tf" default="true" />

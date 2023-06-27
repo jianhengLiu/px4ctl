@@ -15,7 +15,7 @@ using namespace std;
 #define SIM 0
 #define DEAD_ZONE 0.25
 #define MAX_MANUAL_VEL 1.0
-#define RC_REVERSE_PITCH 0
+#define RC_REVERSE_PITCH 1
 #define RC_REVERSE_ROLL 0
 #define RC_REVERSE_THROTTLE 0
 #define TAKEOFF_ALTITUDE 0.32  //  动捕：0.35
@@ -36,6 +36,8 @@ MISSION_STATE mission_state;
 MavrosToolbox mavros_tb;
 ServoToolbox  servo_tb;
 
+float servo_set_pos;
+
 ros::Publisher target_pose_pub;
 
 // 0: 初始时刻； k：看到TAG时刻； t:实时; s(et):设置的目标位姿
@@ -46,7 +48,7 @@ Eigen::Affine3f T_W_A, T_B_C;  // 外参
 
 void pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
 {
-    if (mission_state != LAND)
+    if (mission_state == TASK)
     {
         Eigen::Vector3f    p(pose_set_msg->pose.position.x, pose_set_msg->pose.position.y,
                              pose_set_msg->pose.position.z);
@@ -60,7 +62,7 @@ void pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
 
 void pitch_set_callback(const std_msgs::Float32ConstPtr &pitch_set_msg)
 {
-    servo_tb.set_radian(pitch_set_msg->data);
+    servo_set_pos = -pitch_set_msg->data;
 }
 
 void odom_callback(const geometry_msgs::PoseStampedConstPtr &odom_msg)
@@ -205,7 +207,7 @@ void rc_callback(const mavros_msgs::RCInConstPtr &rc_msg)
             T_B0_Bs.translation().x() +=
                 rc_ch[1] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_PITCH ? -1 : 1);
             T_B0_Bs.translation().y() +=
-                rc_ch[3] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_ROLL ? 1 : -1);
+                rc_ch[0] * MAX_MANUAL_VEL * delta_t * (RC_REVERSE_ROLL ? 1 : -1);
         }
         if (mission_state == LAND)
         {
@@ -233,7 +235,7 @@ int main(int argc, char *argv[])
     ros::Subscriber odom_sub =
         nh.subscribe<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 100, odom_callback);
     ros::Subscriber rc_sub = nh.subscribe<mavros_msgs::RCIn>("/mavros/rc/in", 10, rc_callback);
-    
+
     ros::Subscriber pose_set_sub =
         nh.subscribe<geometry_msgs::PoseStamped>("/ar/cam_pose_level_set", 100, pose_set_callback);
     ros::Subscriber pitch_set_sub =
@@ -247,19 +249,22 @@ int main(int argc, char *argv[])
     mavros_tb.init(nh);
     servo_tb.init();
 
+    // 控制舵机到初始位置，不确定位置先注释这段，避免机械损坏，使用主循环里的函数获取位置
+    servo_set_pos = 0;
+    servo_tb.set_radian(servo_set_pos);
+
     T_W_A.matrix() << 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0., 0., 0., 1.;
     T_B_C.matrix() << 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0., 0., 0., 1.;
 
     while (ros::ok())
     {
         // 获取当前舵机的位置
-        cout << servo_tb.get_radian() << endl;
+        // cout << servo_tb.get_radian() << endl;
 
         // 持续发送setpoint保持飞控OFFBOARD模式
         if (mission_state != INIT)
         {
             T_W_Bs = T_W_B0 * T_B0_Bs;
-            if (mission_state == TASK) {}
 
             geometry_msgs::PoseStamped pose;
             pose.header.stamp    = ros::Time::now();
@@ -274,8 +279,8 @@ int main(int argc, char *argv[])
             pose.pose.orientation.z = q.z();
             target_pose_pub.publish(pose);
         }
-        // 下面写入callback里？
-        // servo_tb.set_radian(0);
+
+        servo_tb.set_radian(servo_set_pos);
         ros::spinOnce();
         rate.sleep();
     }

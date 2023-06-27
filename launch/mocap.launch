@@ -1,8 +1,8 @@
 <launch>
 
-  <arg name="server" default="192.168.2.105"/>
+  <arg name="server" default="192.168.2.189"/>
 
-	<arg name="rigid_body_name" default="uav" />
+	<arg name="rigid_body_name" default="RigidBody" />
 
   <node pkg="vrpn_client_ros" type="vrpn_client_node" name="vrpn_client_node" output="screen">
     <remap from="/vrpn_client_node/$(arg rigid_body_name)/pose" to="/mavros/vision_pose/pose" />

@@ -58,7 +58,7 @@ public:
 
     const int    BAUDRATE = 57600;
     const int    ID       = 1;
-    const double INIT_RAD = -1.57;  // 水平角度，向上数值减小，向下数值增大
+    const double INIT_RAD = -1.6;  // 水平角度，向上数值减小，向下数值增大
 
     DynamixelWorkbench workbench;  //声明对象
     const char        *log;

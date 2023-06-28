@@ -48,7 +48,7 @@ sudo bash ./install_geographiclib_datasets.sh
    # NUC ip: 192.168.2.186
    export ROS_MASTER_URI=http://192.168.2.100:11311
    export ROS_HOSTNAME=192.168.2.186
-   python main.py --hash --exp_path /home/chrisliu/Projects/ActiveRecon/ActiveRecon/exp/realworld_6 --config config/realworld.txt --method 6 --realworld --pose_opt
+   python main.py --hash --exp_path /home/chrisliu/Projects/ActiveRecon/ActiveRecon/exp/realworld_6 --config config/realworld.txt --method 6 --mode 2 --pose_opt
    ```
    nbv自动执行
 10. 6切中，无人机降落

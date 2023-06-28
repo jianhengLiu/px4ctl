@@ -12,13 +12,13 @@
 using namespace std;
 
 // SIM 0：实飞； 1：手持模拟飞
-#define SIM 1
+#define SIM 0
 #define DEAD_ZONE 0.25
 #define MAX_MANUAL_VEL 1.0
 #define RC_REVERSE_PITCH 1
 #define RC_REVERSE_ROLL 0
 #define RC_REVERSE_THROTTLE 0
-#define TAKEOFF_ALTITUDE 0.32  //  动捕：0.35
+#define TAKEOFF_ALTITUDE 0.3  //  动捕：0.35
 #define UAV_HEIGHT 0.3
 
 Eigen::Vector3f TAKEOFF_POS(0.0, 0.0, TAKEOFF_ALTITUDE);
@@ -43,8 +43,7 @@ ros::Publisher target_pose_pub;
 // 0: 初始时刻； k：看到TAG时刻； t:实时; s(et):设置的目标位姿
 //  W: World;V: View; B: Body; A: Apriltag
 Eigen::Affine3f T_W_B0, T_W_Bt;
-Eigen::Affine3f T_B0_Bs, T_W_Bs, T_A_Cs;
-Eigen::Affine3f T_W_A, T_B_C;  // 外参
+Eigen::Affine3f T_B0_Bs, T_W_Bs;
 
 void pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
 {
@@ -54,15 +53,17 @@ void pose_set_callback(const geometry_msgs::PoseStampedConstPtr &pose_set_msg)
                              pose_set_msg->pose.position.z);
         Eigen::Quaternionf q(pose_set_msg->pose.orientation.w, pose_set_msg->pose.orientation.x,
                              pose_set_msg->pose.orientation.y, pose_set_msg->pose.orientation.z);
-        T_A_Cs.matrix().block<3, 3>(0, 0) = q.toRotationMatrix();
-        T_A_Cs.matrix().block<3, 1>(0, 3) = p;
-        T_W_Bs                            = T_W_A * T_A_Cs * T_B_C.inverse();
+        Eigen::Affine3f    T_W_Bs;
+        T_W_Bs.matrix().block<3, 3>(0, 0) = q.toRotationMatrix();
+        T_W_Bs.matrix().block<3, 1>(0, 3) = p;
+        T_B0_Bs                           = T_W_B0.inverse() * T_W_Bs;
     }
 }
 
 void pitch_set_callback(const std_msgs::Float32ConstPtr &pitch_set_msg)
 {
-    servo_set_pos = -pitch_set_msg->data;
+    if (mission_state == TASK)
+        servo_set_pos = -pitch_set_msg->data;
 }
 
 void odom_callback(const geometry_msgs::PoseStampedConstPtr &odom_msg)
@@ -230,7 +231,7 @@ int main(int argc, char *argv[])
 {
     ros::init(argc, argv, "nbv_ctl");
     ros::NodeHandle nh("~");
-    ros::Rate       rate(30);
+    ros::Rate       rate(50);
 
     ros::Subscriber odom_sub =
         nh.subscribe<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 100, odom_callback);
@@ -253,14 +254,15 @@ int main(int argc, char *argv[])
     servo_set_pos = 0;
     servo_tb.set_radian(servo_set_pos);
 
-    T_W_A.matrix() << 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0., 0., 0., 1.;
-    T_B_C.matrix() << 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0., 0., 0., 1.;
-
     while (ros::ok())
     {
         // 获取当前舵机的位置
         // cout << servo_tb.get_radian() << endl;
 
+        if (mission_state == LAND)
+        {
+            servo_tb.set_radian(0);
+        }
         // 持续发送setpoint保持飞控OFFBOARD模式
         if (mission_state != INIT)
         {
